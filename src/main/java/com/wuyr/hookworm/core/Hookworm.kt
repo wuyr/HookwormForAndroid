@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.Looper
 import android.util.Log
 import android.view.ContextThemeWrapper
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.wuyr.hookworm.extensions.PhoneLayoutInflater
@@ -58,18 +57,18 @@ object Hookworm {
     ) {
         preInflateListenerList[className] = preInflateListener
         activities[className]?.also { activity ->
-            (activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater?)?.let {
-                val oldInflater = it
-                if (oldInflater is PhoneLayoutInflater) {
-                    if (oldInflater.preInflateListener != preInflateListener) {
-                        oldInflater.preInflateListener = preInflateListener
-                    }
-                } else {
-                    val inflater = PhoneLayoutInflater(oldInflater, activity).apply {
-                        this.preInflateListener = preInflateListener
-                    }
-                    ContextThemeWrapper::class.set(activity, "mInflater", inflater)
+            val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+            if (oldInflater is PhoneLayoutInflater) {
+                if (oldInflater.preInflateListener != preInflateListener) {
+                    oldInflater.preInflateListener = preInflateListener
                 }
+            } else {
+                val inflater = PhoneLayoutInflater(
+                    activity
+                ).apply {
+                    this.preInflateListener = preInflateListener
+                }
+                ContextThemeWrapper::class.set(activity, "mInflater", inflater)
             }
         }
     }
@@ -102,18 +101,18 @@ object Hookworm {
     ) {
         postInflateListenerList[className] = postInflateListener
         activities[className]?.also { activity ->
-            (activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater?)?.let {
-                val oldInflater = it
-                if (oldInflater is PhoneLayoutInflater) {
-                    if (oldInflater.postInflateListener != postInflateListener) {
-                        oldInflater.postInflateListener = postInflateListener
-                    }
-                } else {
-                    val inflater = PhoneLayoutInflater(oldInflater, activity).apply {
-                        this.postInflateListener = postInflateListener
-                    }
-                    ContextThemeWrapper::class.set(activity, "mInflater", inflater)
+            val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+            if (oldInflater is PhoneLayoutInflater) {
+                if (oldInflater.postInflateListener != postInflateListener) {
+                    oldInflater.postInflateListener = postInflateListener
                 }
+            } else {
+                val inflater = PhoneLayoutInflater(
+                    activity
+                ).apply {
+                    this.postInflateListener = postInflateListener
+                }
+                ContextThemeWrapper::class.set(activity, "mInflater", inflater)
             }
         }
     }
@@ -185,24 +184,25 @@ object Hookworm {
                             activity: Activity, savedInstanceState: Bundle?
                         ) {
                             val className = activity::class.java.name
-                            (activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater?)?.let {
-                                val oldInflater = it
-                                if (oldInflater is PhoneLayoutInflater) {
-                                    oldInflater.preInflateListener =
-                                        preInflateListenerList[className]
-                                            ?: preInflateListenerList[""]
-                                    oldInflater.postInflateListener =
-                                        postInflateListenerList[className]
-                                            ?: postInflateListenerList[""]
-                                } else {
-                                    val inflater =
-                                        PhoneLayoutInflater(oldInflater, activity).apply {
-                                            preInflateListener = preInflateListenerList[className]
-                                                ?: preInflateListenerList[""]
-                                            postInflateListener = postInflateListenerList[className]
-                                                ?: postInflateListenerList[""]
-                                        }
-                                    ContextThemeWrapper::class.set(activity, "mInflater", inflater)
+                            if (preInflateListenerList.isNotEmpty() || postInflateListenerList.isNotEmpty()) {
+                                val preInflateListener =
+                                    preInflateListenerList[className] ?: preInflateListenerList[""]
+                                val postInflateListener = postInflateListenerList[className]
+                                    ?: postInflateListenerList[""]
+                                if (preInflateListener != null || postInflateListener != null) {
+                                    val oldInflater =
+                                        activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+                                    if (oldInflater is PhoneLayoutInflater) {
+                                        oldInflater.preInflateListener = preInflateListener
+                                        oldInflater.postInflateListener = postInflateListener
+                                    } else {
+                                        val inflater = PhoneLayoutInflater(activity)
+                                        inflater.preInflateListener = preInflateListener
+                                        inflater.postInflateListener = postInflateListener
+                                        ContextThemeWrapper::class.set(
+                                            activity, "mInflater", inflater
+                                        )
+                                    }
                                 }
                             }
                             activities[className] = activity
@@ -237,8 +237,9 @@ object Hookworm {
                         }
 
                         override fun onActivityDestroyed(activity: Activity) {
-                            activities.remove(activity::class.java.name)
-                            activityLifecycleCallbackList[activity::class.java.name]
+                            val className = activity::class.java.name
+                            activities.remove(className)
+                            activityLifecycleCallbackList[className]
                                 ?.onActivityDestroyed(activity)
                             activityLifecycleCallbackList[""]?.onActivityDestroyed(activity)
                         }
