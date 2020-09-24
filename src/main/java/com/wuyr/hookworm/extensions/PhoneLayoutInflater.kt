@@ -25,8 +25,20 @@ class PhoneLayoutInflater(original: LayoutInflater, newContext: Context?) :
     private var tempFilter: Filter? = null
 
     init {
-        tempFactory?.let { originalLayoutInflater.factory = it }
-        tempFactory2?.let { originalLayoutInflater.factory2 = it }
+        tempFactory?.let {
+            try {
+                originalLayoutInflater.factory = it
+            } catch (e: Exception) {
+                //Ignore
+            }
+        }
+        tempFactory2?.let {
+            try {
+                originalLayoutInflater.factory2 = it
+            } catch (e: Exception) {
+                //Ignore
+            }
+        }
         tempFilter?.let { originalLayoutInflater.filter = it }
     }
 
@@ -53,18 +65,26 @@ class PhoneLayoutInflater(original: LayoutInflater, newContext: Context?) :
     ): View? = originalLayoutInflater.onCreateView(viewContext, parent, name, attrs)
 
     override fun setFactory(factory: Factory?) {
-        if (originalLayoutInflater == null) {
-            tempFactory = factory
-        } else {
-            originalLayoutInflater.factory = factory
+        try {
+            if (originalLayoutInflater == null) {
+                tempFactory = factory
+            } else {
+                originalLayoutInflater.factory = factory
+            }
+        } catch (e: Exception) {
+            //Ignore
         }
     }
 
     override fun setFactory2(factory2: Factory2?) {
-        if (originalLayoutInflater == null) {
-            tempFactory2 = factory2
-        } else {
-            originalLayoutInflater.factory2 = factory2
+        try {
+            if (originalLayoutInflater == null) {
+                tempFactory2 = factory2
+            } else {
+                originalLayoutInflater.factory2 = factory2
+            }
+        } catch (e: Exception) {
+            //Ignore
         }
     }
 
