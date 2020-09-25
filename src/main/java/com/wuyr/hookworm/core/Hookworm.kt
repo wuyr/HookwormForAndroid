@@ -34,6 +34,12 @@ object Hookworm {
     @JvmStatic
     val activities = HashMap<String, Activity?>()
 
+    /**
+     * Application实例初始化完毕的回调
+     */
+    @JvmStatic
+    var onApplicationInitializedListener: ((Application) -> Unit)? = null
+
     private val activityLifecycleCallbackList =
         HashMap<String, Application.ActivityLifecycleCallbacks>()
 
@@ -48,7 +54,6 @@ object Hookworm {
      *
      *  @param className 对应的Activity类名（完整类名），空字符串则表示拦截所有Activity的布局加载
      *  @param preInflateListener 用来接收回调的lambda，需返回：layoutId、parent、attachToRoot（可替换成自己想要的参数）
-     *  ）
      */
     @JvmStatic
     fun registerPreInflateListener(
@@ -177,6 +182,7 @@ object Hookworm {
                 ) Thread.sleep(10)
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
                     application = this
+                    onApplicationInitializedListener?.invoke(this)
                     registerActivityLifecycleCallbacks(object :
                         Application.ActivityLifecycleCallbacks {
 
