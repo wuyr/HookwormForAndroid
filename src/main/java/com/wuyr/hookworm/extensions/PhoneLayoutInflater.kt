@@ -21,7 +21,7 @@ class PhoneLayoutInflater : LayoutInflater {
      * 对直接传XmlPullParser参数的inflate方法无效
      */
     var preInflateListener: ((layoutId: Int, root: ViewGroup?, attachToRoot: Boolean)
-    -> Triple<Int, ViewGroup, Boolean>)? = null
+    -> Triple<Int, ViewGroup?, Boolean>)? = null
 
     /**
      * 在inflate完成后回调

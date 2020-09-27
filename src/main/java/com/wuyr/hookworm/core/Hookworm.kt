@@ -44,7 +44,7 @@ object Hookworm {
         HashMap<String, Application.ActivityLifecycleCallbacks>()
 
     private val preInflateListenerList =
-        HashMap<String, ((layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup, Boolean>)?>()
+        HashMap<String, ((layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup?, Boolean>)?>()
 
     private var postInflateListenerList = HashMap<String, ((rootView: View?) -> View?)?>()
 
@@ -58,7 +58,7 @@ object Hookworm {
     @JvmStatic
     fun registerPreInflateListener(
         className: String,
-        preInflateListener: (layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup, Boolean>
+        preInflateListener: (layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup?, Boolean>
     ) {
         preInflateListenerList[className] = preInflateListener
         activities[className]?.also { activity ->
