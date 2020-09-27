@@ -102,10 +102,10 @@
 
 |Name|Description|
 |------|-----------|
+|Hookworm.setOnApplicationInitializedListener|监听Application初始化|
 |Hookworm.registerActivityLifecycleCallbacks|监听Activity的生命周期|
 |Hookworm.registerPreInflateListener|在LayoutInflater加载布局前做手脚|
 |Hookworm.registerPostInflateListener|在LayoutInflater加载布局后做手脚|
-|Hookworm.setOnApplicationInitializedListener|Application实例初始化完毕的回调|
 |Hookworm.getApplication|获取进程Application实例|
 |Hookworm.getActivities|获取进程存活Activity实例集合|
 |Hookworm.findActivityByClassName|根据完整类名查找Activity对象|

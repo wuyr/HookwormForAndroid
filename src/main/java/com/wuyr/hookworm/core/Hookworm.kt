@@ -35,7 +35,7 @@ object Hookworm {
     val activities = HashMap<String, Activity?>()
 
     /**
-     * Application实例初始化完毕的回调
+     * 监听Application初始化
      */
     @JvmStatic
     var onApplicationInitializedListener: ((Application) -> Unit)? = null
