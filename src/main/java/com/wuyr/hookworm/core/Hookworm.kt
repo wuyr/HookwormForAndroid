@@ -22,6 +22,13 @@ import kotlin.concurrent.thread
 object Hookworm {
 
     /**
+     * 是否转接插件Dex的ClassLoader
+     * 如果引用到了目标应用的一些自定义类或接口（或第三方库），则需要转接，否则会报 [ClassNotFoundException]
+     */
+    @JvmStatic
+    var transferClassLoader = false
+
+    /**
      * 进程Application实例
      */
     @JvmStatic
@@ -183,6 +190,9 @@ object Hookworm {
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
                     application = this
                     onApplicationInitializedListener?.invoke(this)
+                    if (transferClassLoader){
+                        ClassLoader::class.set(Hookworm::class.java.classLoader, "parent", this::class.java.classLoader)
+                    }
                     registerActivityLifecycleCallbacks(object :
                         Application.ActivityLifecycleCallbacks {
 

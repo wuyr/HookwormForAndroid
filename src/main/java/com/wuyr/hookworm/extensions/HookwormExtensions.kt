@@ -1,3 +1,5 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package com.wuyr.hookworm.extensions
 
 import android.annotation.SuppressLint
@@ -22,7 +24,7 @@ import com.wuyr.hookworm.utils.invoke
  *  @param idName id名数组（即：可同时匹配多个id名）
  *  @return 对应的View，找不到即为null
  */
-fun <V : View> Activity.findViewByIDName(vararg idName: String): View? {
+fun <V : View> Activity.findViewByIDName(vararg idName: String): V? {
     idName.forEach { name ->
         findViewById<V>(resources.getIdentifier(name, "id", packageName))?.let { return it }
     }
@@ -55,7 +57,7 @@ fun Activity.findAllViewsByIDName(vararg idName: String): List<View> {
  *  @param idName id名数组（即：可同时匹配多个id名）
  *  @return 对应的View，找不到即为null
  */
-fun <V : View> View.findViewByIDName(vararg idName: String): View? {
+fun <V : View> View.findViewByIDName(vararg idName: String): V? {
     idName.forEach { name ->
         findViewById<V>(resources.getIdentifier(name, "id", context.packageName))?.let { return it }
     }
@@ -88,7 +90,7 @@ fun View.findAllViewsByIDName(vararg idName: String): List<View> {
  *  @param textList 文本数组（即：可同时匹配多个文本）
  *  @return 对应的View，找不到即为null
  */
-fun Activity.findViewByText(vararg textList: String): View? {
+fun <V : View> Activity.findViewByText(vararg textList: String): V? {
     fun find(view: View): View? {
         if (view is TextView) {
             return if (textList.any { it == view.text.toString() }) view else null
@@ -103,7 +105,7 @@ fun Activity.findViewByText(vararg textList: String): View? {
         }
         return null
     }
-    return find(window.decorView)
+    return find(window.decorView) as V
 }
 
 /**
@@ -135,7 +137,7 @@ fun Activity.findAllViewsByText(vararg textList: String): List<View> {
  *  @param textList 文本数组（即：可同时匹配多个文本）
  *  @return 对应的View，找不到即为null
  */
-fun View.findViewByText(vararg textList: String): View? {
+fun <V : View> View.findViewByText(vararg textList: String): V? {
     fun find(view: View): View? {
         if (view is TextView) {
             return if (textList.any { it == view.text.toString() }) view else null
@@ -150,7 +152,7 @@ fun View.findViewByText(vararg textList: String): View? {
         }
         return null
     }
-    return find(this)
+    return find(this) as V
 }
 
 /**
