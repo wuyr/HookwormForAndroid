@@ -1,5 +1,6 @@
 package com.wuyr.hookworm.core
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.content.Context
@@ -10,8 +11,10 @@ import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import com.wuyr.hookworm.extensions.PhoneLayoutInflater
+import com.wuyr.hookworm.utils.get
 import com.wuyr.hookworm.utils.invoke
 import com.wuyr.hookworm.utils.set
+import java.lang.reflect.Proxy
 import kotlin.concurrent.thread
 
 /**
@@ -27,6 +30,30 @@ object Hookworm {
      */
     @JvmStatic
     var transferClassLoader = false
+        set(value) {
+            if (field != value) {
+                field = value
+                if (isApplicationInitialized && value) {
+                    application.initClassLoader()
+                }
+            }
+        }
+
+    /**
+     * 是否劫持全局的LayoutInflater
+     * 如果需要监听Fragment的布局加载则需要开启
+     */
+    @JvmStatic
+    var hookGlobalLayoutInflater = false
+        set(value) {
+            if (field != value) {
+                field = value
+                if (isApplicationInitialized && value) {
+                    initGlobalLayoutInflater()
+                }
+            }
+        }
+    private var globalLayoutInflater: PhoneLayoutInflater? = null
 
     /**
      * 进程Application实例
@@ -46,96 +73,62 @@ object Hookworm {
      */
     @JvmStatic
     var onApplicationInitializedListener: ((Application) -> Unit)? = null
+    private var isApplicationInitialized = false
 
     private val activityLifecycleCallbackList =
         HashMap<String, Application.ActivityLifecycleCallbacks>()
 
-    private val preInflateListenerList =
-        HashMap<String, ((layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup?, Boolean>)?>()
-
-    private var postInflateListenerList = HashMap<String, ((rootView: View?) -> View?)?>()
+    private var postInflateListenerList =
+        HashMap<String, ((resourceId: Int, resourceName: String, rootView: View?) -> View?)?>()
 
     /**
-     * 在LayoutInflater加载布局前做手脚
-     * 注意：此方法并不能拦截 LayoutInflater.inflate(XmlPullParser, ViewGroup, Boolean)
-     *
-     *  @param className 对应的Activity类名（完整类名），空字符串则表示拦截所有Activity的布局加载
-     *  @param preInflateListener 用来接收回调的lambda，需返回：layoutId、parent、attachToRoot（可替换成自己想要的参数）
-     */
-    @JvmStatic
-    fun registerPreInflateListener(
-        className: String,
-        preInflateListener: (layoutId: Int, root: ViewGroup?, attachToRoot: Boolean) -> Triple<Int, ViewGroup?, Boolean>
-    ) {
-        preInflateListenerList[className] = preInflateListener
-        activities[className]?.also { activity ->
-            val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-            if (oldInflater is PhoneLayoutInflater) {
-                if (oldInflater.preInflateListener != preInflateListener) {
-                    oldInflater.preInflateListener = preInflateListener
-                }
-            } else {
-                val inflater = PhoneLayoutInflater(
-                    activity
-                ).apply {
-                    this.preInflateListener = preInflateListener
-                }
-                ContextThemeWrapper::class.set(activity, "mInflater", inflater)
-            }
-        }
-    }
-
-    /**
-     *  取消（加载布局前）拦截LayoutInflater
-     *
-     *  @param className 对应的Activity类名（完整类名）
-     */
-    @JvmStatic
-    fun unregisterPreInflateListener(className: String) {
-        preInflateListenerList.remove(className)
-        activities[className]?.let { activity ->
-            val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-            if (oldInflater is PhoneLayoutInflater) {
-                oldInflater.preInflateListener = null
-            }
-        }
-    }
-
-    /**
-     * 在LayoutInflater加载布局后拦截
+     * 拦截LayoutInflater布局加载
      *
      *  @param className 对应的Activity类名（完整类名），空字符串则表示拦截所有Activity的布局加载
      *  @param postInflateListener 用来接收回调的lambda，需返回加载后的View（可在返回前对这个View做手脚）
+     *
+     *  Lambda参数：
+     *  resourceId：当前布局ID
+     *  resourceName：布局名
+     *  rootView：加载后的View
      */
     @JvmStatic
     fun registerPostInflateListener(
-        className: String, postInflateListener: (rootView: View?) -> View?
+        className: String,
+        postInflateListener: (resourceId: Int, resourceName: String, rootView: View?) -> View?
     ) {
         postInflateListenerList[className] = postInflateListener
-        activities[className]?.also { activity ->
-            val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-            if (oldInflater is PhoneLayoutInflater) {
-                if (oldInflater.postInflateListener != postInflateListener) {
-                    oldInflater.postInflateListener = postInflateListener
+        if (className.isEmpty() && hookGlobalLayoutInflater) {
+            globalLayoutInflater?.postInflateListener = postInflateListener
+        } else {
+            activities[className]?.also { activity ->
+                val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+                if (oldInflater is PhoneLayoutInflater) {
+                    if (oldInflater.postInflateListener != postInflateListener) {
+                        oldInflater.postInflateListener = postInflateListener
+                    }
+                } else {
+                    val inflater = PhoneLayoutInflater(
+                        activity
+                    ).apply {
+                        this.postInflateListener = postInflateListener
+                    }
+                    ContextThemeWrapper::class.set(activity, "mInflater", inflater)
                 }
-            } else {
-                val inflater = PhoneLayoutInflater(
-                    activity
-                ).apply {
-                    this.postInflateListener = postInflateListener
-                }
-                ContextThemeWrapper::class.set(activity, "mInflater", inflater)
             }
         }
     }
 
     /**
-     *  取消（加载布局后）拦截LayoutInflater
+     *  取消拦截LayoutInflater布局加载
      *
      *  @param className 对应的Activity类名（完整类名）
      */
     @JvmStatic
     fun unregisterPostInflateListener(className: String) {
+        if (className.isEmpty() && hookGlobalLayoutInflater) {
+            globalLayoutInflater?.postInflateListener = null
+        }
         postInflateListenerList.remove(className)
         activities[className]?.let { activity ->
             val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
@@ -187,92 +180,126 @@ object Hookworm {
                 while (Looper.getMainLooper() == null) Thread.sleep(10)
                 while ("android.app.ActivityThread".invoke<Any>(null, "currentApplication") == null
                 ) Thread.sleep(10)
+                initGlobalLayoutInflater()
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
+                    initClassLoader()
                     application = this
                     onApplicationInitializedListener?.invoke(this)
-                    if (transferClassLoader){
-                        ClassLoader::class.set(Hookworm::class.java.classLoader, "parent", this::class.java.classLoader)
-                    }
-                    registerActivityLifecycleCallbacks(object :
-                        Application.ActivityLifecycleCallbacks {
-
-                        override fun onActivityCreated(
-                            activity: Activity, savedInstanceState: Bundle?
-                        ) {
-                            val className = activity::class.java.name
-                            if (preInflateListenerList.isNotEmpty() || postInflateListenerList.isNotEmpty()) {
-                                val preInflateListener =
-                                    preInflateListenerList[className] ?: preInflateListenerList[""]
-                                val postInflateListener = postInflateListenerList[className]
-                                    ?: postInflateListenerList[""]
-                                if (preInflateListener != null || postInflateListener != null) {
-                                    val oldInflater =
-                                        activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-                                    if (oldInflater is PhoneLayoutInflater) {
-                                        oldInflater.preInflateListener = preInflateListener
-                                        oldInflater.postInflateListener = postInflateListener
-                                    } else {
-                                        val inflater = PhoneLayoutInflater(activity)
-                                        inflater.preInflateListener = preInflateListener
-                                        inflater.postInflateListener = postInflateListener
-                                        ContextThemeWrapper::class.set(
-                                            activity, "mInflater", inflater
-                                        )
-                                    }
-                                }
-                            }
-                            activities[className] = activity
-                            activityLifecycleCallbackList[className]
-                                ?.onActivityCreated(activity, savedInstanceState)
-                            activityLifecycleCallbackList[""]
-                                ?.onActivityCreated(activity, savedInstanceState)
-                        }
-
-                        override fun onActivityStarted(activity: Activity) {
-                            activityLifecycleCallbackList[activity::class.java.name]
-                                ?.onActivityStarted(activity)
-                            activityLifecycleCallbackList[""]?.onActivityStarted(activity)
-                        }
-
-                        override fun onActivityResumed(activity: Activity) {
-                            activityLifecycleCallbackList[activity::class.java.name]
-                                ?.onActivityResumed(activity)
-                            activityLifecycleCallbackList[""]?.onActivityResumed(activity)
-                        }
-
-                        override fun onActivityPaused(activity: Activity) {
-                            activityLifecycleCallbackList[activity::class.java.name]
-                                ?.onActivityPaused(activity)
-                            activityLifecycleCallbackList[""]?.onActivityPaused(activity)
-                        }
-
-                        override fun onActivityStopped(activity: Activity) {
-                            activityLifecycleCallbackList[activity::class.java.name]
-                                ?.onActivityStopped(activity)
-                            activityLifecycleCallbackList[""]?.onActivityStopped(activity)
-                        }
-
-                        override fun onActivityDestroyed(activity: Activity) {
-                            val className = activity::class.java.name
-                            activities.remove(className)
-                            activityLifecycleCallbackList[className]
-                                ?.onActivityDestroyed(activity)
-                            activityLifecycleCallbackList[""]?.onActivityDestroyed(activity)
-                        }
-
-                        override fun onActivitySaveInstanceState(
-                            activity: Activity, outState: Bundle
-                        ) {
-                            activityLifecycleCallbackList[activity::class.java.name]
-                                ?.onActivitySaveInstanceState(activity, outState)
-                            activityLifecycleCallbackList[""]
-                                ?.onActivitySaveInstanceState(activity, outState)
-                        }
-                    })
+                    registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks())
+                    isApplicationInitialized = true
                 }
             } catch (e: Exception) {
                 Log.e(Main.TAG, Log.getStackTraceString(e))
             }
+        }
+    }
+
+    private fun hookLayoutInflater(className: String, activity: Activity) {
+        if (postInflateListenerList.isNotEmpty()) {
+            (postInflateListenerList[className]
+                ?: if (hookGlobalLayoutInflater) null else postInflateListenerList[""]).let { postInflateListener ->
+                if (postInflateListener != null) {
+                    val oldInflater =
+                        activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+                    if (oldInflater is PhoneLayoutInflater) {
+                        oldInflater.postInflateListener = postInflateListener
+                    } else {
+                        val inflater = PhoneLayoutInflater(activity)
+                        inflater.postInflateListener = postInflateListener
+                        ContextThemeWrapper::class.set(
+                            activity, "mInflater", inflater
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun Application.initClassLoader() {
+        if (transferClassLoader) {
+            ClassLoader::class.set(
+                Hookworm::class.java.classLoader, "parent", this::class.java.classLoader
+            )
+        }
+    }
+
+    @SuppressLint("PrivateApi")
+    private fun initGlobalLayoutInflater() {
+        if (hookGlobalLayoutInflater && globalLayoutInflater == null) {
+            "android.app.SystemServiceRegistry".get<MutableMap<String, Any>>(
+                null, "SYSTEM_SERVICE_FETCHERS"
+            )?.let { fetchers ->
+                fetchers[Context.LAYOUT_INFLATER_SERVICE]?.let { layoutInflaterFetcher ->
+                    fetchers[Context.LAYOUT_INFLATER_SERVICE] = Proxy.newProxyInstance(
+                        ClassLoader.getSystemClassLoader(),
+                        arrayOf(Class.forName("android.app.SystemServiceRegistry\$ServiceFetcher"))
+                    ) { _, method, args ->
+                        if (method.name == "getService") {
+                            method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
+                            globalLayoutInflater ?: PhoneLayoutInflater(args[0] as Context?).also {
+                                globalLayoutInflater = it
+                                it.postInflateListener = postInflateListenerList[""]
+                            }
+                        } else method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
+                    }
+                }
+            }
+        }
+    }
+
+    class ActivityLifecycleCallbacks : Application.ActivityLifecycleCallbacks {
+
+        override fun onActivityCreated(
+            activity: Activity, savedInstanceState: Bundle?
+        ) {
+            val className = activity::class.java.name
+            hookLayoutInflater(className, activity)
+            activities[className] = activity
+            activityLifecycleCallbackList[className]
+                ?.onActivityCreated(activity, savedInstanceState)
+            activityLifecycleCallbackList[""]
+                ?.onActivityCreated(activity, savedInstanceState)
+        }
+
+        override fun onActivityStarted(activity: Activity) {
+            activityLifecycleCallbackList[activity::class.java.name]
+                ?.onActivityStarted(activity)
+            activityLifecycleCallbackList[""]?.onActivityStarted(activity)
+        }
+
+        override fun onActivityResumed(activity: Activity) {
+            activityLifecycleCallbackList[activity::class.java.name]
+                ?.onActivityResumed(activity)
+            activityLifecycleCallbackList[""]?.onActivityResumed(activity)
+        }
+
+        override fun onActivityPaused(activity: Activity) {
+            activityLifecycleCallbackList[activity::class.java.name]
+                ?.onActivityPaused(activity)
+            activityLifecycleCallbackList[""]?.onActivityPaused(activity)
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            activityLifecycleCallbackList[activity::class.java.name]
+                ?.onActivityStopped(activity)
+            activityLifecycleCallbackList[""]?.onActivityStopped(activity)
+        }
+
+        override fun onActivityDestroyed(activity: Activity) {
+            val className = activity::class.java.name
+            activities.remove(className)
+            activityLifecycleCallbackList[className]
+                ?.onActivityDestroyed(activity)
+            activityLifecycleCallbackList[""]?.onActivityDestroyed(activity)
+        }
+
+        override fun onActivitySaveInstanceState(
+            activity: Activity, outState: Bundle
+        ) {
+            activityLifecycleCallbackList[activity::class.java.name]
+                ?.onActivitySaveInstanceState(activity, outState)
+            activityLifecycleCallbackList[""]
+                ?.onActivitySaveInstanceState(activity, outState)
         }
     }
 }
