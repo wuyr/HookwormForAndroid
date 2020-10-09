@@ -2,13 +2,10 @@ package com.wuyr.hookworm.extensions
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import com.wuyr.hookworm.core.Main
 import org.xmlpull.v1.XmlPullParser
-import kotlin.jvm.Throws
 
 /**
  * @author wuyr
@@ -29,6 +26,10 @@ class PhoneLayoutInflater : LayoutInflater {
      */
     var postInflateListener: ((resourceId: Int, resourceName: String, rootView: View?) -> View?)? =
         null
+        set(value) {
+            field = value
+            isInPostInflate = false
+        }
 
     private companion object {
         private val sClassPrefixList = arrayOf("android.widget.", "android.webkit.", "android.app.")
@@ -55,12 +56,18 @@ class PhoneLayoutInflater : LayoutInflater {
         return super.inflate(resource, root, attachToRoot)
     }
 
-    override fun inflate(parser: XmlPullParser?, root: ViewGroup?, attachToRoot: Boolean): View? {
-        val rootView = super.inflate(parser, root, attachToRoot)
-        return (postInflateListener?.invoke(currentResourceId, currentResourceName, rootView)
-            ?: rootView).also {
-            currentResourceId = 0
-            currentResourceName = ""
+    private var isInPostInflate = false
+
+    override fun inflate(parser: XmlPullParser?, root: ViewGroup?, attachToRoot: Boolean): View? =
+        super.inflate(parser, root, attachToRoot).let { rootView ->
+            if (!isInPostInflate && postInflateListener != null) {
+                isInPostInflate = true
+                postInflateListener?.invoke(currentResourceId, currentResourceName, rootView).also {
+                    isInPostInflate = false
+                }
+            } else rootView.also {
+                currentResourceId = 0
+                currentResourceName = ""
+            }
         }
-    }
 }

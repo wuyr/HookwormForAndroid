@@ -37,7 +37,7 @@
 
 至于怎样拿到对象，这就看具体场景了。
 
-比如你想修改某个app的某个页面按钮点击行为，那就可以先监听目标Activity的生命周期来获取到对应的Activity对象，进一步find到View实例然后给它重新set一个OnClickerListener。
+比如你想修改某个app的某个页面按钮点击行为，那就可以先监听目标Activity的生命周期来获取到对应的Activity对象，进一步find到View实例然后给它重新set一个OnClickListener。
 
 再比如你想修改某个app的启动图，一个比较通用的方法是：监听对应Activity的onCreate，在这里把`Activity.mWindow`的`mContentParent`替换成你自定义的FrameLayout，这样你就能在`onLayout`之前找到显示启动图的View实例，并对它做手脚。
 
