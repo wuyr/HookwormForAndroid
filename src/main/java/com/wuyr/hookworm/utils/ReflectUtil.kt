@@ -135,7 +135,8 @@ fun Class<*>.invokeVoid(
  *  @return 目标对象新实例
  */
 fun <T> Class<*>.newInstance(vararg paramsPairs: Pair<KClass<*>, Any?> = emptyArray()) = try {
-    getDeclaredConstructor(*paramsPairs.map { it.first.java }.toTypedArray()).run {
+    if (paramsPairs.isEmpty()) newInstance()
+    else getDeclaredConstructor(*paramsPairs.map { it.first.java }.toTypedArray()).run {
         isAccessible = true
         newInstance(*paramsPairs.map { it.second }.toTypedArray()) as? T?
     }
