@@ -13,6 +13,7 @@ import com.wuyr.hookworm.extensions.PhoneLayoutInflater
 import com.wuyr.hookworm.utils.get
 import com.wuyr.hookworm.utils.invoke
 import com.wuyr.hookworm.utils.set
+import java.io.File
 import java.lang.reflect.Proxy
 import kotlin.concurrent.thread
 
@@ -183,6 +184,7 @@ object Hookworm {
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
                     initClassLoader()
                     application = this
+                    initLibrary()
                     onApplicationInitializedListener?.invoke(this)
                     registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks())
                     isApplicationInitialized = true
@@ -219,6 +221,28 @@ object Hookworm {
             ClassLoader::class.set(
                 Hookworm::class.java.classLoader, "parent", this::class.java.classLoader
             )
+        }
+    }
+
+    private fun initLibrary() {
+        @Suppress("ConstantConditionIf")
+        if (Constants.hasSOFile()) {
+            "dalvik.system.BaseDexClassLoader".get<Any>(
+                Hookworm::class.java.classLoader, "pathList"
+            )?.let { pathList ->
+                pathList::class.run {
+                    val newDirectories = get<MutableList<File>>(
+                        pathList, "nativeLibraryDirectories"
+                    )!! + pathList::class.get<MutableList<File>>(
+                        pathList, "systemNativeLibraryDirectories"
+                    )!! + File(application.dataDir, Constants.SO_PATH)
+                    Log.e("initLibrary", newDirectories.toString())
+                    set(
+                        pathList, "nativeLibraryPathElements",
+                        invoke<Any>(pathList, "makePathElements", List::class to newDirectories)
+                    )
+                }
+            }
         }
     }
 

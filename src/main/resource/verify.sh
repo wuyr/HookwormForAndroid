@@ -5,10 +5,28 @@ abort_verify() {
   ui_print "*********************************************************"
   ui_print "! $1"
   ui_print "! This zip may be corrupted, please try downloading again"
-  abort    "*********************************************************"
+  abort "*********************************************************"
 }
 
 # extract <zip> <file> <target dir> <junk paths>
+extract_dir() {
+  zip=$1
+  file=$2
+  dir=$3
+  echo "unzip -o $zip $file/*"
+  unzip -o "$zip" "$file/*"
+  echo "mkdir -p $dir"
+  mkdir -p "$dir"
+  parent_dir=$(
+    if [ "${file:0:1}" = '/' ]; then echo -ne "/"; else echo -ne ""; fi
+    echo "${file//\// }" | awk -F " " '{print $1}'
+  )
+  echo "cp -Rv $parent_dir $dir/"
+  cp -Rv "$parent_dir" "$dir/"
+  echo "rm -rf $parent_dir"
+  rm -rf "$parent_dir"
+}
+
 extract() {
   zip=$1
   file=$2

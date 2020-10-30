@@ -94,7 +94,7 @@
  - **automaticInstallation**：编译完毕自动安装模块（需要手机已通过adb连接到电脑（只能连一台），并已安装Magisk和Riru模块！）。1为开启，其他值为关闭；
 
 配置好这些属性之后，就可以编译打包运行了！
-注意，编译打包的话，需要运行***project:assemble***这个Task，不是***app:assemble***也不是***module:assemble***！
+注意，编译打包的话，需要运行***project:assemble***(Tasks/build/assemble)这个Task，不是***app:assemble***也不是***module:assemble***！
     
 <br/>
 
