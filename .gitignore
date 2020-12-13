@@ -3,8 +3,7 @@
 *.aar
 *.ap_
 *.aab
-.cxx
-src/main/assets/module.properties
+src/main/assets/*
 # Files for the ART/Dalvik VM
 *.dex
 
