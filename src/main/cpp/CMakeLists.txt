@@ -1,8 +1,17 @@
 cmake_minimum_required(VERSION 3.4.1)
 
-if (NOT DEFINED LIBRARY_NAME)
-    message(FATAL_ERROR "LIBRARY_NAME is not set")
+if (NOT DEFINED MODULE_NAME)
+    message(FATAL_ERROR "MODULE_NAME is not set")
 endif ()
+
+add_definitions(-DDEX_PATH=${DEX_PATH})
+add_definitions(-DMAIN_CLASS=${MAIN_CLASS})
+add_definitions(-DPROCESS_NAME_ARRAY=${PROCESS_NAME_ARRAY})
+add_definitions(-DPROCESS_NAME_ARRAY_SIZE=${PROCESS_NAME_ARRAY_SIZE})
+add_definitions(-DRIRU_MODULE)
+add_definitions(-DRIRU_MODULE_API_VERSION=${RIRU_MODULE_API_VERSION})
+add_definitions(-DRIRU_MODULE_VERSION=${RIRU_MODULE_VERSION})
+add_definitions(-DRIRU_MODULE_VERSION_NAME=${RIRU_MODULE_VERSION_NAME})
 
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
@@ -24,6 +33,5 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${C_FLAGS}")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LINKER_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LINKER_FLAGS}")
 
-add_library(${LIBRARY_NAME} SHARED main.c inject.c)
-target_link_libraries(${LIBRARY_NAME} log)
-set_target_properties(${LIBRARY_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)
+add_library(${MODULE_NAME} SHARED main.cpp)
+set_target_properties(${MODULE_NAME} PROPERTIES LINK_FLAGS_RELEASE -s)

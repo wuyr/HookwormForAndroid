@@ -1,3 +1,4 @@
+import com.android.build.api.dsl.ExternalNativeCmakeOptions
 import javassist.ClassPool
 import javassist.CtMethod
 import org.apache.tools.ant.filters.FixCrLfFilter
@@ -19,47 +20,50 @@ buildscript {
     }
 }
 
-rootProject.allprojects.forEach { it.buildDir.deleteRecursively() }
+val versionsProp =
+    Properties().apply { load(file("src/main/resource/versions.properties").inputStream()) }
+val moduleCompileSdkVersion = versionsProp.getProperty("compileSdkVersion").toInt()
+val moduleMinSdkVersion = versionsProp.getProperty("minSdkVersion").toInt()
+val moduleTargetSdkVersion = versionsProp.getProperty("targetSdkVersion").toInt()
+val cmakeVersion: String = versionsProp.getProperty("cmakeVersion")
+val corektxVersion: String = versionsProp.getProperty("core-ktxVersion")
+val maxRiruApiVersionCode = versionsProp.getProperty("maxRiruApiVersionCode").toInt()
+val minRiruApiVersionCode = versionsProp.getProperty("minRiruApiVersionCode").toInt()
+val minRiruApiVersionName: String = versionsProp.getProperty("minRiruApiVersionName")
 
-val properties =
+val moduleProp =
     Properties().apply { load(file("src/main/assets/module.properties").inputStream()) }
-val moduleId: String = properties.getProperty("moduleId")
-val moduleName: String = properties.getProperty("moduleName")
-val moduleAuthor: String = properties.getProperty("moduleAuthor")
-val moduleDescription: String = properties.getProperty("moduleDescription")
-val moduleVersion: String = properties.getProperty("moduleVersion")
-val moduleDexPath: String = "system/framework/$moduleId.dex"
-val moduleMainClass: String = properties.getProperty("moduleMainClass")
-val targetProcessName: String = properties.getProperty("targetProcessName")
+val moduleId: String = moduleProp.getProperty("moduleId")
+val moduleName: String = moduleProp.getProperty("moduleName")
+val moduleAuthor: String = moduleProp.getProperty("moduleAuthor")
+val moduleDescription: String = moduleProp.getProperty("moduleDescription")
+val moduleVersionName: String = moduleProp.getProperty("moduleVersionName")
+val moduleVersionCode: String = moduleProp.getProperty("moduleVersionCode")
+val moduleMainClass: String = moduleProp.getProperty("moduleMainClass")
+val targetProcessName: String = moduleProp.getProperty("targetProcessName")
 val libraryPath: String =
-    properties.getProperty("libraryPath").let { if (it.isEmpty()) moduleId else it }
-val automaticInstallation: Boolean = properties.getProperty("automaticInstallation") == "1"
-
+    moduleProp.getProperty("libraryPath").let { if (it.isEmpty()) moduleId else it }
+val automaticInstallation: Boolean =
+    moduleProp.getProperty("automaticInstallation").let { it == "1" || it == "true" }
+val debug: Boolean = moduleProp.getProperty("debug").let { it == "1" || it == "true" }
+val moduleDexPath: String = "${if (debug) "data/local/tmp" else "system/framework"}/$moduleId.dex"
+val hookwormMainClass = "com/wuyr/hookworm/core/Main"
+val targetProcessNameList =
+    targetProcessName.split(";").filter { it.isNotBlank() && it.isNotEmpty() }
+val processNameArray = targetProcessNameList.joinToString("\", \"", "{\"", "\"}")
+val processNameArraySize = targetProcessNameList.size
 val platform: OperatingSystem = OperatingSystem.current()
 
+checkProperties()
+rootProject.allprojects.forEach { it.buildDir.deleteRecursively() }
+
 android {
-
-    compileSdkVersion(30)
-    buildToolsVersion("30.0.2")
-
+    compileSdkVersion(moduleCompileSdkVersion)
     defaultConfig {
-
-        minSdkVersion(23)
-        targetSdkVersion(30)
-
-        versionCode = 1
-        versionName = moduleVersion
-
-        externalNativeBuild {
-            cmake {
-                arguments("-DLIBRARY_NAME:STRING=riru_$moduleId")
-            }
-        }
-        checkProperties()
-        refreshMainHeader()
-        refreshConstants()
+        minSdkVersion(moduleMinSdkVersion)
+        targetSdkVersion(moduleTargetSdkVersion)
+        externalNativeBuild { cmake { addDefinitions() } }
     }
-
     buildTypes {
         named("release") {
             isMinifyEnabled = true
@@ -69,19 +73,17 @@ android {
             )
         }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-
     kotlinOptions {
         jvmTarget = "1.8"
     }
-
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
+            version = cmakeVersion
         }
     }
 
@@ -91,9 +93,8 @@ android {
         }
     }
 }
-
 dependencies {
-    implementation("androidx.core:core-ktx:1.3.2")
+    implementation("androidx.core:core-ktx:$corektxVersion")
 }
 
 fun checkProperties() {
@@ -105,34 +106,34 @@ fun checkProperties() {
     }
 }
 
-fun refreshMainHeader() =
-    targetProcessName.split(";").filter { it.isNotBlank() && it.isNotEmpty() }.run {
-        file("src/main/cpp/main.h").writeText(
-            file("src/main/resource/template_main_header").readText()
-                .format(moduleDexPath, joinToString("\", \"", "\"", "\""), size)
-        )
-    }
-
-fun refreshConstants() = file("src/main/java/com/wuyr/hookworm/core/Constants.java").writeText(
-    file("src/main/resource/template_constants").readText()
-        .format(moduleMainClass, libraryPath)
+fun ExternalNativeCmakeOptions.addDefinitions() = arguments(
+    "-DDEX_PATH=\"$moduleDexPath\"",
+    "-DMAIN_CLASS=\"$hookwormMainClass\"",
+    "-DPROCESS_NAME_ARRAY=$processNameArray",
+    "-DPROCESS_NAME_ARRAY_SIZE=$processNameArraySize",
+    "-DMODULE_NAME=riru_$moduleId",
+    "-DRIRU_MODULE_API_VERSION=$maxRiruApiVersionCode",
+    "-DRIRU_MODULE_VERSION=$moduleVersionCode",
+    "-DRIRU_MODULE_VERSION_NAME=\"$moduleVersionName\""
 )
 
+var magiskDir = ""
+
 fun File.buildModule() {
-    refreshConstantsAgain()
+    initModuleInfo()
     val task = rootProject.project("app").tasks.find { it.name == "assemble" }
         ?: error("Please dependent on to an app module!")
     val buildDir = task.project.buildDir.also { it.deleteRecursively() }
     task.doLast {
         val zipPath = buildDir.resolve("intermediates/magisk/").apply {
             deleteRecursively()
+            magiskDir = absolutePath
             mkdirs()
         }
         copy {
             into(zipPath)
             processResource()
             processScript()
-            processProperties()
             zipTree(File(buildDir, "outputs/apk/release/app-release-unsigned.apk")
                 .also { if (!it.exists()) error("${it.name} not found!") }).let { apkFileTree ->
                 processLibs(apkFileTree)
@@ -140,7 +141,27 @@ fun File.buildModule() {
             }
         }
         zipPath.apply {
-            resolve("extras.files").writeText("${moduleDexPath}\n")
+            val prop = "name=$moduleName\n" +
+                    "version=$moduleVersionName\n" +
+                    "versionCode=$moduleVersionCode\n" +
+                    "author=$moduleAuthor\n" +
+                    "description=$moduleDescription"
+            resolve("module.prop").writeText(
+                "id=$moduleId\n$prop\ntarget_process_name=$targetProcessName\nlibrary_path=$libraryPath"
+            )
+            resolve("riru").apply {
+                mkdir()
+                resolve("module.prop.new").writeText(
+                    "$prop\nminApi=$minRiruApiVersionCode"
+                )
+            }
+            resolve("extras.files").run {
+                if (debug) {
+                    createNewFile()
+                } else {
+                    writeText("${moduleDexPath}\n")
+                }
+            }
             fixLineBreaks()
             generateSHA256Sum()
         }
@@ -164,72 +185,61 @@ fun File.buildModule() {
     }
 }
 
-fun refreshConstantsAgain() = (project.tasks.find { it.name == "compileReleaseJavaWithJavac" }
+fun initModuleInfo() = (project.tasks.find { it.name == "compileReleaseJavaWithJavac" }
     ?: error("Task 'compileReleaseJavaWithJavac' not found!"))
     .doLast {
-        val hasSOFile =
-            (rootProject.project("app").tasks.find { it.name == "mergeReleaseNativeLibs" }
-                ?: error("Task 'mergeReleaseNativeLibs' not found!")).run {
-                this is com.android.build.gradle.internal.tasks.MergeNativeLibsTask && externalLibNativeLibs.files.any {
-                    it.isDirectory && it.list()?.isNotEmpty() == true
-                }
+        val classPool = ClassPool.getDefault()
+        val moduleInfoClassPath =
+            buildDir.resolve("intermediates/javac/release/classes").absolutePath
+        classPool.insertClassPath(moduleInfoClassPath)
+        classPool.getCtClass("com.wuyr.hookworm.core.ModuleInfo").run {
+            getDeclaredMethod("getMainClass").name = "getMainClassOld"
+            addMethod(
+                CtMethod.make("static String getMainClass(){ return \"$moduleMainClass\"; }", this)
+            )
+
+            if (debug) {
+                getDeclaredMethod("isDebug").name = "isDebugOld"
+                addMethod(CtMethod.make("static boolean isDebug(){ return true; }", this))
             }
-        if (hasSOFile) {
-            val classPool = ClassPool.getDefault()
-            val constantsClassPath =
-                buildDir.resolve("intermediates/javac/release/classes").absolutePath
-            classPool.insertClassPath(constantsClassPath)
-            classPool.getCtClass("com.wuyr.hookworm.core.Constants").run {
+
+            val hasSOFile =
+                (rootProject.project("app").tasks.find { it.name == "mergeReleaseNativeLibs" }
+                    ?: error("Task 'mergeReleaseNativeLibs' not found!")).run {
+                    this is com.android.build.gradle.internal.tasks.MergeNativeLibsTask && externalLibNativeLibs.files.any {
+                        it.isDirectory && it.list()?.isNotEmpty() == true
+                    }
+                }
+            if (hasSOFile) {
                 getDeclaredMethod("hasSOFile").name = "hasSOFileOld"
                 addMethod(CtMethod.make("static boolean hasSOFile(){ return true; }", this))
-                writeFile(constantsClassPath)
-                detach()
+
+                getDeclaredMethod("getSOPath").name = "getSOPathOld"
+                addMethod(
+                    CtMethod.make(
+                        "static String getSOPath(){ return \"$libraryPath\"; }",
+                        this
+                    )
+                )
             }
+            writeFile(moduleInfoClassPath)
+            detach()
         }
     }
 
 fun CopySpec.processResource() = from(file("src/main/resource")) {
-    exclude(
-        "riru.sh", "module.prop", "riru/module.prop.new",
-        "template_constants", "template_main_header"
-    )
+    exclude("riru.sh", "versions.properties")
 }
 
 fun CopySpec.processScript() =
     from(file("src/main/resource/riru.sh")) {
         filter { line ->
             line.replace("%%%RIRU_MODULE_ID%%%", moduleId)
-                .replace("%%%RIRU_MIN_API_VERSION%%%", "7")
-                .replace("%%%RIRU_MIN_VERSION_NAME%%%", moduleVersion)
+                .replace("%%%RIRU_MIN_API_VERSION%%%", minRiruApiVersionCode.toString())
+                .replace("%%%RIRU_MIN_VERSION_NAME%%%", minRiruApiVersionName)
         }
         filter(FixCrLfFilter::class.java)
     }
-
-fun CopySpec.processProperties() {
-    from(file("src/main/resource/module.prop")) {
-        filter { line ->
-            line.replace("%%%MAGISK_ID%%%", moduleId)
-                .replace("%%%MAIGKS_NAME%%%", moduleName)
-                .replace("%%%MAGISK_VERSION_NAME%%%", moduleVersion)
-                .replace("%%%MAGISK_AUTHOR%%%", moduleAuthor)
-                .replace("%%%MAGISK_DESCRIPTION%%%", moduleDescription)
-                .replace("%%%TARGET_PROCESS_NAME%%%", targetProcessName)
-                .replace("%%%LIBRARY_PATH%%%", libraryPath)
-        }
-        filter(FixCrLfFilter::class.java)
-    }
-    from(file("src/main/resource/riru/module.prop.new")) {
-        into("riru/")
-        filter { line ->
-            line.replace("%%%RIRU_NAME%%%", moduleName)
-                .replace("%%%RIRU_VERSION_NAME%%%", moduleVersion)
-                .replace("%%%RIRU_AUTHOR%%%", moduleAuthor)
-                .replace("%%%RIRU_DESCRIPTION%%%", moduleDescription)
-                .replace("%%%RIRU_API%%%", "7")
-        }
-        filter(FixCrLfFilter::class.java)
-    }
-}
 
 fun CopySpec.processLibs(apkFileTree: FileTree) = from(apkFileTree) {
     include("lib/**")
@@ -248,15 +258,18 @@ fun CopySpec.processDex(apkFileTree: FileTree) = from(apkFileTree) {
 }
 
 fun File.fixLineBreaks() {
-    val ignoreFiles = arrayOf("system", "system_x86")
+    val ignoreDirs = arrayOf("system", "system_x86")
+    val ignoreSuffix = arrayOf("so", "dex")
     fun walk(file: File) {
         if (file.isDirectory) {
-            if (!ignoreFiles.contains(file.name)) {
-                file.listFiles()?.forEach { if (!ignoreFiles.contains(it.name)) walk(it) }
+            if (!ignoreDirs.contains(file.name)) {
+                file.listFiles()?.forEach { if (!ignoreDirs.contains(it.name)) walk(it) }
             }
         } else {
-            file.readText().run {
-                if (contains("\r\n")) file.writeText(replace("\r\n", "\n"))
+            if (ignoreSuffix.none { file.absolutePath.endsWith(it) }) {
+                file.readText().run {
+                    if (contains("\r\n")) file.writeText(replace("\r\n", "\n"))
+                }
             }
         }
     }
@@ -275,12 +288,12 @@ fun File.generateSHA256Sum() = fileTree(this).matching {
 fun File.openInGUI() = platform.runCatching {
     Runtime.getRuntime().exec(
         "${
-        when {
-            isWindows -> "explorer"
-            isLinux -> "nautilus"
-            isMacOsX -> "open"
-            else -> ""
-        }
+            when {
+                isWindows -> "explorer"
+                isLinux -> "nautilus"
+                isMacOsX -> "open"
+                else -> ""
+            }
         } ${this@openInGUI}"
     )
 }.isSuccess
@@ -291,28 +304,54 @@ val platformArgs: Array<String>
 val File.adb: String get() = if (platform.isWindows) "SET Path=$this/platform-tools&&adb" else "$this/platform-tools/adb"
 val File.adbWithoutSetup: String get() = if (platform.isWindows) "adb" else "$this/platform-tools/adb"
 
-fun isDeviceConnected(sdkDirectory: File) = platform.runCatching {
-    Runtime.getRuntime().exec(arrayOf(*platformArgs, "${sdkDirectory.adb} devices")).run {
+fun isDeviceConnected(sdkDirectory: File) =
+    exec("${sdkDirectory.adb} devices").count { it == '\n' } == 3
+
+fun exec(command: String) = runCatching {
+    Runtime.getRuntime().exec(arrayOf(*platformArgs, command)).run {
         waitFor()
-        inputStream.reader().readLines().size == 3.also { destroy() }
+        inputStream.reader().readText().also { destroy() }
     }
-}.getOrDefault(false)
+}.getOrDefault("")
 
 fun installModuleFailed(sdkDirectory: File, moduleFile: File, zipPath: File) =
-    "${sdkDirectory.adb} push $moduleFile /data/local/tmp/&&${sdkDirectory.adbWithoutSetup} push $zipPath/META-INF/com/google/android/update-binary /data/local/tmp/&&${sdkDirectory.adbWithoutSetup} shell su".runCatching {
-        Runtime.getRuntime().exec(arrayOf(*platformArgs, this)).run {
-            thread(isDaemon = true) { readContentSafely(inputStream) { it.p() } }
-            thread(isDaemon = true) { readContentSafely(errorStream) { it.p() } }
-            outputStream.run {
-                write("cd /data/local/tmp&&BOOTMODE=true sh update-binary dummy 1 ${moduleFile.name}&&rm update-binary&&rm ${moduleFile.name}&&reboot\n".toByteArray())
-                flush()
-                close()
+    if (debug && (exec("${sdkDirectory.adb} shell ls $moduleDexPath&&echo 1").contains("1"))) {
+        if (exec("${sdkDirectory.adb} push $magiskDir/$moduleDexPath /data/local/tmp/&&echo 1".also { it.p() })
+                .contains("1")
+        ) {
+            targetProcessNameList.forEach { processName ->
+                exec("adb shell su -c killall $processName".also { it.p() })
             }
-            waitFor()
-            destroy()
+            "*********************************".p()
+            "Module installation is completed.".p()
+            "*********************************".p()
+            false
+        } else {
+            "*********************************".p()
+            "Module installation failed! Please try again.".p()
+            "*********************************".p()
+            true
         }
-        false
-    }.getOrDefault(true)
+    } else {
+        exec("${sdkDirectory.adb} shell rm /data/local/tmp/$moduleId.dex".also { it.p() })
+        if (debug) {
+            exec("${sdkDirectory.adb} push $magiskDir/$moduleDexPath /data/local/tmp/").p()
+        }
+        "${sdkDirectory.adb} push $moduleFile /data/local/tmp/&&${sdkDirectory.adbWithoutSetup} push $zipPath/META-INF/com/google/android/update-binary /data/local/tmp/&&${sdkDirectory.adbWithoutSetup} shell su".runCatching {
+            Runtime.getRuntime().exec(arrayOf(*platformArgs, this)).run {
+                thread(isDaemon = true) { readContentSafely(inputStream) { it.p() } }
+                thread(isDaemon = true) { readContentSafely(errorStream) { it.p() } }
+                outputStream.run {
+                    write("cd /data/local/tmp&&BOOTMODE=true sh update-binary dummy 1 ${moduleFile.name}&&rm update-binary&&rm ${moduleFile.name}&&reboot\n".toByteArray())
+                    flush()
+                    close()
+                }
+                waitFor()
+                destroy()
+            }
+            false
+        }.getOrDefault(true)
+    }
 
 fun Process.readContentSafely(inputStream: java.io.InputStream, onReadLine: (String) -> Unit) {
     runCatching {

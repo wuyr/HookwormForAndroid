@@ -1,7 +1,0 @@
-id=%%%MAGISK_ID%%%
-name=%%%MAIGKS_NAME%%%
-version=%%%MAGISK_VERSION_NAME%%%
-author=%%%MAGISK_AUTHOR%%%
-description=%%%MAGISK_DESCRIPTION%%%
-target_process_name=%%%TARGET_PROCESS_NAME%%%
-library_path=%%%LIBRARY_PATH%%%

@@ -1,6 +1,0 @@
-package com.wuyr.hookworm.core;
-class Constants {
-    static final String MAIN_CLASS = "%s";
-    static final String SO_PATH = "%s";
-    static boolean hasSOFile(){ return false; }
-}

@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import org.xmlpull.v1.XmlPullParser
+import kotlin.jvm.Throws
 
 /**
  * @author wuyr

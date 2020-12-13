@@ -4,7 +4,9 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.ContextThemeWrapper
@@ -13,7 +15,9 @@ import com.wuyr.hookworm.extensions.PhoneLayoutInflater
 import com.wuyr.hookworm.utils.get
 import com.wuyr.hookworm.utils.invoke
 import com.wuyr.hookworm.utils.set
+import com.wuyr.hookworm.utils.throwReflectException
 import java.io.File
+import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import kotlin.concurrent.thread
 
@@ -113,7 +117,11 @@ object Hookworm {
                     ).apply {
                         this.postInflateListener = postInflateListener
                     }
-                    ContextThemeWrapper::class.set(activity, "mInflater", inflater)
+                    try {
+                        ContextThemeWrapper::class.set(activity, "mInflater", inflater)
+                    } catch (e: Exception) {
+                        Log.e(Main.TAG, "registerPostInflateListener", e)
+                    }
                 }
             }
         }
@@ -174,24 +182,48 @@ object Hookworm {
     @JvmStatic
     fun init() {
         if (initialized) return
+        throwReflectException = true
         initialized = true
         thread(isDaemon = true) {
             try {
                 while (Looper.getMainLooper() == null) Thread.sleep(10)
                 while ("android.app.ActivityThread".invoke<Any>(null, "currentApplication") == null
                 ) Thread.sleep(10)
-                initGlobalLayoutInflater()
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
+                    if (ModuleInfo.isDebug() && Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) {
+                        hiddenApiExemptions()
+                    }
+                    initGlobalLayoutInflater()
                     initClassLoader()
-                    application = this
                     initLibrary()
-                    onApplicationInitializedListener?.invoke(this)
+                    application = this
+                    Handler(Looper.getMainLooper()).post {
+                        onApplicationInitializedListener?.invoke(this)
+                    }
                     registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks())
                     isApplicationInitialized = true
                 }
             } catch (e: Exception) {
                 Log.e(Main.TAG, Log.getStackTraceString(e))
             }
+        }
+    }
+
+    private fun hiddenApiExemptions() {
+        try {
+            val forName = Class::class.java.getDeclaredMethod("forName", String::class.java)
+            val getDeclaredMethod = Class::class.java.getDeclaredMethod(
+                "getDeclaredMethod", String::class.java, arrayOf(Class::class.java)::class.java
+            )
+            val vmRuntimeClass = forName.invoke(null, "dalvik.system.VMRuntime") as Class<*>
+            val getRuntime = getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", null) as Method
+            val setHiddenApiExemptions = getDeclaredMethod.invoke(
+                vmRuntimeClass, "setHiddenApiExemptions",
+                arrayOf<Class<*>>(Array<String>::class.java)
+            ) as Method
+            setHiddenApiExemptions.invoke(getRuntime.invoke(null), arrayOf("L"))
+        } catch (e: Exception) {
+            Log.e(Main.TAG, "hiddenApiExemptions", e)
         }
     }
 
@@ -207,9 +239,13 @@ object Hookworm {
                     } else {
                         val inflater = PhoneLayoutInflater(activity)
                         inflater.postInflateListener = postInflateListener
-                        ContextThemeWrapper::class.set(
-                            activity, "mInflater", inflater
-                        )
+                        try {
+                            ContextThemeWrapper::class.set(
+                                activity, "mInflater", inflater
+                            )
+                        } catch (e: Exception) {
+                            Log.e(Main.TAG, "hookLayoutInflater", e)
+                        }
                     }
                 }
             }
@@ -217,56 +253,68 @@ object Hookworm {
     }
 
     private fun Application.initClassLoader() {
-        if (transferClassLoader) {
-            ClassLoader::class.set(
-                Hookworm::class.java.classLoader, "parent", this::class.java.classLoader
-            )
+        try {
+            if (transferClassLoader) {
+                ClassLoader::class.set(
+                    Hookworm::class.java.classLoader, "parent", this::class.java.classLoader
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(Main.TAG, "initClassLoader", e)
         }
     }
 
     private fun initLibrary() {
-        @Suppress("ConstantConditionIf")
-        if (Constants.hasSOFile()) {
-            "dalvik.system.BaseDexClassLoader".get<Any>(
-                Hookworm::class.java.classLoader, "pathList"
-            )?.let { pathList ->
-                pathList::class.run {
-                    val newDirectories = get<MutableList<File>>(
-                        pathList, "nativeLibraryDirectories"
-                    )!! + pathList::class.get<MutableList<File>>(
-                        pathList, "systemNativeLibraryDirectories"
-                    )!! + File(application.dataDir, Constants.SO_PATH)
-                    Log.e("initLibrary", newDirectories.toString())
-                    set(
-                        pathList, "nativeLibraryPathElements",
-                        invoke<Any>(pathList, "makePathElements", List::class to newDirectories)
-                    )
+        try {
+            @Suppress("ConstantConditionIf")
+            if (ModuleInfo.hasSOFile()) {
+                "dalvik.system.BaseDexClassLoader".get<Any>(
+                    Hookworm::class.java.classLoader, "pathList"
+                )?.let { pathList ->
+                    pathList::class.run {
+                        val newDirectories = get<MutableList<File>>(
+                            pathList, "nativeLibraryDirectories"
+                        )!! + pathList::class.get<MutableList<File>>(
+                            pathList, "systemNativeLibraryDirectories"
+                        )!! + File(application.applicationInfo.dataDir, ModuleInfo.getSOPath())
+                        set(
+                            pathList, "nativeLibraryPathElements",
+                            invoke<Any>(pathList, "makePathElements", List::class to newDirectories)
+                        )
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(Main.TAG, "initLibrary", e)
         }
     }
 
     @SuppressLint("PrivateApi")
     private fun initGlobalLayoutInflater() {
-        if (hookGlobalLayoutInflater && globalLayoutInflater == null) {
-            "android.app.SystemServiceRegistry".get<MutableMap<String, Any>>(
-                null, "SYSTEM_SERVICE_FETCHERS"
-            )?.let { fetchers ->
-                fetchers[Context.LAYOUT_INFLATER_SERVICE]?.let { layoutInflaterFetcher ->
-                    fetchers[Context.LAYOUT_INFLATER_SERVICE] = Proxy.newProxyInstance(
-                        ClassLoader.getSystemClassLoader(),
-                        arrayOf(Class.forName("android.app.SystemServiceRegistry\$ServiceFetcher"))
-                    ) { _, method, args ->
-                        if (method.name == "getService") {
-                            method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
-                            globalLayoutInflater ?: PhoneLayoutInflater(args[0] as Context?).also {
-                                globalLayoutInflater = it
-                                it.postInflateListener = postInflateListenerList[""]
-                            }
-                        } else method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
+        try {
+            if (hookGlobalLayoutInflater && globalLayoutInflater == null) {
+                "android.app.SystemServiceRegistry".get<MutableMap<String, Any>>(
+                    null, "SYSTEM_SERVICE_FETCHERS"
+                )?.let { fetchers ->
+                    fetchers[Context.LAYOUT_INFLATER_SERVICE]?.let { layoutInflaterFetcher ->
+                        fetchers[Context.LAYOUT_INFLATER_SERVICE] = Proxy.newProxyInstance(
+                            ClassLoader.getSystemClassLoader(),
+                            arrayOf(Class.forName("android.app.SystemServiceRegistry\$ServiceFetcher"))
+                        ) { _, method, args ->
+                            if (method.name == "getService") {
+                                method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
+                                globalLayoutInflater
+                                    ?: PhoneLayoutInflater(args[0] as Context?).also {
+                                        globalLayoutInflater = it
+                                        it.postInflateListener = postInflateListenerList[""]
+                                    }
+                            } else method.invoke(layoutInflaterFetcher, *args ?: arrayOf())
+                        }
                     }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(Main.TAG, "initGlobalLayoutInflater", e)
         }
     }
 
