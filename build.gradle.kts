@@ -32,7 +32,7 @@ val minRiruApiVersionCode = versionsProp.getProperty("minRiruApiVersionCode").to
 val minRiruApiVersionName: String = versionsProp.getProperty("minRiruApiVersionName")
 
 val moduleProp =
-    Properties().apply { load(file("src/main/assets/module.properties").inputStream()) }
+    Properties().apply { load(file("module.properties").inputStream()) }
 val moduleId: String = moduleProp.getProperty("moduleId")
 val moduleName: String = moduleProp.getProperty("moduleName")
 val moduleAuthor: String = moduleProp.getProperty("moduleAuthor")
