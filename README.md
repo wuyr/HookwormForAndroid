@@ -22,7 +22,7 @@
 <br/>
 
 ### 原理：
-有一个叫Riru的Magisk模块，它会把系统的libmemtrack.so替换掉，并对外公开Zygote初始化进程的一些API，比如nativeForkAndSpecialize。 
+有一个叫Riru的Magisk模块，它会把系统的libmemtrack.so替换掉（新版改为指定`ro.dalvik.vm.native.bridge`属性值为自己的so），并对外公开Zygote初始化进程的一些API，比如`forkAndSpecializePost`。 
 
 在Zygote Fork进程的前后，都会对外 “发通知” ，如果趁这个时机向指定进程注入自己的代码，那么，当进程启动完成后，自己的代码就运行在指定进程内了，这样就可以~~为所欲为~~扩展一些功能，或者更改某些逻辑等等。
 
@@ -54,11 +54,13 @@
 ### 亮点：
  - 配置成本极低，添加这个Module依赖就行了，你只需关注你自己的代码逻辑；
  
- - 所有的配置都集中到了assets/module.properties文件里，直接修改这个文件即可，比如主入口类，目标进程等；
+ - 所有的配置都集中到了module.properties文件里，直接修改这个文件即可，比如主入口类，目标进程等；
  
  - 提供了一些基本的API，方便进行Hook工作，一般情况下，只需要几行代码就能监听到按钮的点击，或者布局的加载了；
  
  - **自动刷入！** 是的，从此解放双手，像开发普通应用那样，编译完就能自动刷入手机了，如果是手动安装的话，每次至少浪费20秒时间；
+ 
+ - **免重启(最小化)安装！** 提供快速调试的能力；
 
 <br/>
 
@@ -71,7 +73,7 @@
 
  4. 导入刚刚下载Module，并依赖到主模块中；
  
- 5. 配置插件属性，修改Module/src/main/assets下的module.properties，比如给moduleMainClass属性填上刚刚创建的ModuleMain完整类名（带包名）；
+ 5. 配置插件属性，先把模块根目录下的`module.properties.sample`改名为`module.properties`，然后根据此文件里的注释完善插件信息，比如给moduleMainClass属性填上刚刚创建的ModuleMain完整类名（带包名）；
  
 <br/>
  
@@ -85,15 +87,19 @@
  
  - **moduleDescription**：模块描述，自由填写；
  
- - **moduleVersion**：版本号，自由填写；
+ - **moduleVersionName**：模块版本名，自由填写；
+ 
+ - **moduleVersionCode**：模块版本号，自由填写；
  
  - **moduleMainClass**：主入口类名，例：com.demo.ModuleMain；
  
  - **targetProcessName**：目标进程名/包名，即要寄生的目标。不填写则寄生所有进程。同时寄生多个目标，用  ;  分隔，如: com.demo.application1;com.demo.application2；
  
  - **automaticInstallation**：编译完毕自动安装模块（需要手机已通过adb连接到电脑（只能连一台），并已安装Magisk和Riru模块！）。1为开启，其他值为关闭；
+ 
+ - **debug**：Debug提供最小化安装（除首次安装外免重启）能力，可以快速测试模块（开启此选项需先开启automaticInstallation）。
 
-配置好这些属性之后，就可以编译打包运行了！
+配置好这些属性之后，就可以编写代码，编译打包运行了！
 注意，编译打包的话，需要运行***project:assemble***(Tasks/build/assemble)这个Task，不是***app:assemble***也不是***module:assemble***！
     
 <br/>
