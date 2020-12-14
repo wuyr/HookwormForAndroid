@@ -73,7 +73,7 @@
 
  4. 导入刚刚下载Module，并依赖到主模块中；
  
- 5. 配置插件属性，先把模块根目录下的`module.properties.sample`改名为`module.properties`，然后根据此文件里的注释完善插件信息，比如给moduleMainClass属性填上刚刚创建的ModuleMain完整类名（带包名）；
+ 5. 配置插件属性，先把模块根目录下的`module.properties.sample`复制一份，并改名为`module.properties`，然后编辑这个`module.properties`，根据里面的注释来完善插件信息，比如给moduleMainClass属性填上刚刚创建的ModuleMain完整类名（带包名）；
  
 <br/>
  
