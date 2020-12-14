@@ -20,6 +20,10 @@ buildscript {
     }
 }
 
+if (!file("module.properties").exists()) {
+    error("Please copy \"module.properties.sample\" and rename to \"module.properties\" and fill in the module information!")
+}
+
 val versionsProp =
     Properties().apply { load(file("src/main/resource/versions.properties").inputStream()) }
 val moduleCompileSdkVersion = versionsProp.getProperty("compileSdkVersion").toInt()
