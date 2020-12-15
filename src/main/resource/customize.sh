@@ -29,6 +29,9 @@ get_bit() {
   if [ "$(getprop ro.build.version.sdk)" -ge "30" ]; then
     search_result="$(find /data/app -name "$1*")"
     package_dir="$(basename "$(dirname "$search_result")")/$(basename "$search_result")"
+    if [[ "$(dirname "$package_dir")" == "app" ]]; then
+      package_dir="$(basename "$package_dir")"
+    fi
   else
     package_dir="$(ls "/data/app" | grep "$1")"
   fi
@@ -68,6 +71,8 @@ process_32bit_libraries() {
       done
       ui_print "rm $file"
       rm "$file"
+      ui_print "rm $file.sha256sum"
+      rm "$file.sha256sum"
     fi
   done
 }
@@ -92,6 +97,8 @@ process_64bit_libraries() {
       done
       ui_print "rm $file"
       rm "$file"
+      ui_print "rm $file.sha256sum"
+      rm "$file.sha256sum"
     fi
   done
 }
