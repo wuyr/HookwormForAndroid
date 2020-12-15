@@ -190,13 +190,13 @@ object Hookworm {
                 while ("android.app.ActivityThread".invoke<Any>(null, "currentApplication") == null
                 ) Thread.sleep(10)
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
+                    application = this
                     if (ModuleInfo.isDebug() && Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) {
                         hiddenApiExemptions()
                     }
                     initGlobalLayoutInflater()
                     initClassLoader()
                     initLibrary()
-                    application = this
                     Handler(Looper.getMainLooper()).post {
                         onApplicationInitializedListener?.invoke(this)
                     }
