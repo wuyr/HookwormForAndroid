@@ -11,6 +11,7 @@ import android.widget.TextView
 import androidx.core.view.forEach
 import com.wuyr.hookworm.utils.get
 import com.wuyr.hookworm.utils.invoke
+import kotlin.reflect.KClass
 
 /**
  * @author wuyr
@@ -19,17 +20,53 @@ import com.wuyr.hookworm.utils.invoke
  */
 
 /**
+ * 根据类型来查找所有对应的View实例
+ *
+ *  @return 对应的View集合
+ */
+fun Activity.findAllViewsByClass(clazz: KClass<out View>): List<View> {
+    val result = ArrayList<View>()
+    fun fill(view: View) {
+        if (clazz.isInstance(view)) {
+            result += view
+        }
+        if (view is ViewGroup) {
+            view.forEach { fill(it) }
+        }
+    }
+    fill(window.decorView)
+    return result
+}
+
+/**
+ * 根据类型来查找所有对应的View实例
+ *
+ *  @return 对应的View集合
+ */
+fun View.findAllViewsByClass(clazz: KClass<out View>): List<View> {
+    val result = ArrayList<View>()
+    fun fill(view: View) {
+        if (clazz.isInstance(view)) {
+            result += view
+        }
+        if (view is ViewGroup) {
+            view.forEach { fill(it) }
+        }
+    }
+    fill(this)
+    return result
+}
+
+/**
  * 根据资源id名来查找View实例
  *
  *  @param idName id名数组（即：可同时匹配多个id名）
  *  @return 对应的View，找不到即为null
  */
-fun <V : View> Activity.findViewByIDName(vararg idName: String): V? {
-    idName.forEach { name ->
-        findViewById<V>(resources.getIdentifier(name, "id", packageName))?.let { return it }
+fun <V : View> Activity.findViewByIDName(vararg idName: String): V? =
+    findAllViewsByIDName(*idName).let {
+        if (it.isEmpty()) null else it[0] as V?
     }
-    return null
-}
 
 /**
  * 根据资源id名来查找所有对应的View实例
@@ -41,7 +78,7 @@ fun Activity.findAllViewsByIDName(vararg idName: String): List<View> {
     val result = ArrayList<View>()
     fun fill(view: View) {
         idName.forEach { name ->
-            if (view.id == resources.getIdentifier(name, "id", packageName)) result += view
+            if (name == runCatching { resources.getResourceEntryName(view.id) }.getOrNull()) result += view
         }
         if (view is ViewGroup) {
             view.forEach { fill(it) }
@@ -57,12 +94,10 @@ fun Activity.findAllViewsByIDName(vararg idName: String): List<View> {
  *  @param idName id名数组（即：可同时匹配多个id名）
  *  @return 对应的View，找不到即为null
  */
-fun <V : View> View.findViewByIDName(vararg idName: String): V? {
-    idName.forEach { name ->
-        findViewById<V>(resources.getIdentifier(name, "id", context.packageName))?.let { return it }
+fun <V : View> View.findViewByIDName(vararg idName: String): V? =
+    findAllViewsByIDName(*idName).let {
+        if (it.isEmpty()) null else it[0] as V?
     }
-    return null
-}
 
 /**
  * 根据资源id名来查找所有对应的View实例
@@ -74,7 +109,7 @@ fun View.findAllViewsByIDName(vararg idName: String): List<View> {
     val result = ArrayList<View>()
     fun fill(view: View) {
         idName.forEach { name ->
-            if (view.id == resources.getIdentifier(name, "id", context.packageName)) result += view
+            if (name == runCatching { resources.getResourceEntryName(view.id) }.getOrNull()) result += view
         }
         if (view is ViewGroup) {
             view.forEach { fill(it) }

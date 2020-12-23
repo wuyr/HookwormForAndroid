@@ -201,6 +201,10 @@ fun initModuleInfo() = (project.tasks.find { it.name == "compileReleaseJavaWithJ
             addMethod(
                 CtMethod.make("static String getMainClass(){ return \"$moduleMainClass\"; }", this)
             )
+            getDeclaredMethod("getDexPath").name = "getDexPathOld"
+            addMethod(
+                CtMethod.make("static String getDexPath(){ return \"$moduleDexPath\"; }", this)
+            )
 
             if (debug) {
                 getDeclaredMethod("isDebug").name = "isDebugOld"

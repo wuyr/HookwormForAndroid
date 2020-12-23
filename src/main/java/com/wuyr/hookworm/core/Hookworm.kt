@@ -12,12 +12,9 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.View
 import com.wuyr.hookworm.extensions.PhoneLayoutInflater
-import com.wuyr.hookworm.utils.get
-import com.wuyr.hookworm.utils.invoke
-import com.wuyr.hookworm.utils.set
-import com.wuyr.hookworm.utils.throwReflectException
+import com.wuyr.hookworm.utils.*
+import dalvik.system.DexFile
 import java.io.File
-import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import kotlin.concurrent.thread
 
@@ -211,19 +208,17 @@ object Hookworm {
 
     private fun hiddenApiExemptions() {
         try {
-            val forName = Class::class.java.getDeclaredMethod("forName", String::class.java)
-            val getDeclaredMethod = Class::class.java.getDeclaredMethod(
-                "getDeclaredMethod", String::class.java, arrayOf(Class::class.java)::class.java
-            )
-            val vmRuntimeClass = forName.invoke(null, "dalvik.system.VMRuntime") as Class<*>
-            val getRuntime = getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", null) as Method
-            val setHiddenApiExemptions = getDeclaredMethod.invoke(
-                vmRuntimeClass, "setHiddenApiExemptions",
-                arrayOf<Class<*>>(Array<String>::class.java)
-            ) as Method
-            setHiddenApiExemptions.invoke(getRuntime.invoke(null), arrayOf("L"))
-        } catch (e: Exception) {
-            Log.e(Main.TAG, "hiddenApiExemptions", e)
+            Impactor.hiddenApiExemptions()
+        } catch (t: Throwable) {
+            try {
+                DexFile(ModuleInfo.getDexPath()).apply {
+                    loadClass(Impactor::class.java.canonicalName, null)
+                        .invokeVoid(null, "hiddenApiExemptions")
+                    close()
+                }
+            } catch (t: Throwable) {
+                Log.e(Main.TAG, t.toString(), t)
+            }
         }
     }
 
@@ -279,7 +274,11 @@ object Hookworm {
                         )!! + File(application.applicationInfo.dataDir, ModuleInfo.getSOPath())
                         set(
                             pathList, "nativeLibraryPathElements",
-                            invoke<Any>(pathList, "makePathElements", List::class to newDirectories)
+                            invoke<Any>(
+                                pathList,
+                                "makePathElements",
+                                List::class to newDirectories
+                            )
                         )
                     }
                 }

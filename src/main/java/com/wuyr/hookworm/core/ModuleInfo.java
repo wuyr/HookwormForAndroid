@@ -9,6 +9,10 @@ package com.wuyr.hookworm.core;
  */
 class ModuleInfo {
 
+    static String getDexPath() {
+        return "";
+    }
+
     static String getMainClass() {
         return "";
     }
