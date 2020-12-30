@@ -208,6 +208,7 @@ object Hookworm {
                     tempActivityLifecycleCallbacksList.forEach { callback ->
                         registerActivityLifecycleCallbacks(callback)
                     }
+                    tempActivityLifecycleCallbacksList.clear()
                     isApplicationInitialized = true
                 }
             } catch (e: Exception) {
