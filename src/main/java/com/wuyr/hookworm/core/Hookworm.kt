@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.View
 import com.wuyr.hookworm.extensions.PhoneLayoutInflater
+import com.wuyr.hookworm.extensions.SimpleActivityLifecycleCallbacks
 import com.wuyr.hookworm.utils.*
 import dalvik.system.DexFile
 import java.io.File
@@ -82,16 +83,19 @@ object Hookworm {
     private var postInflateListenerList =
         HashMap<String, ((resourceId: Int, resourceName: String, rootView: View?) -> View?)?>()
 
+    private val tempActivityLifecycleCallbacksList =
+        ArrayList<Application.ActivityLifecycleCallbacks>()
+
     /**
      * 拦截LayoutInflater布局加载
      *
      *  @param className 对应的Activity类名（完整类名），空字符串则表示拦截所有Activity的布局加载
      *  @param postInflateListener 用来接收回调的lambda，需返回加载后的View（可在返回前对这个View做手脚）
      *
-     *  Lambda参数：
-     *  resourceId：当前布局ID
-     *  resourceName：布局名
-     *  rootView：加载后的View
+     *  Lambda参数
+     *      resourceId：正在加载的xml ID
+     *      resourceName：正在加载的xml名称
+     *      rootView：加载完成后的View
      */
     @JvmStatic
     fun registerPostInflateListener(
@@ -176,6 +180,7 @@ object Hookworm {
 
     private var initialized = false
 
+    @Suppress("ControlFlowWithEmptyBody")
     @JvmStatic
     fun init() {
         if (initialized) return
@@ -183,9 +188,11 @@ object Hookworm {
         initialized = true
         thread(isDaemon = true) {
             try {
-                while (Looper.getMainLooper() == null) Thread.sleep(10)
+                while (Looper.getMainLooper() == null) {
+                }
                 while ("android.app.ActivityThread".invoke<Any>(null, "currentApplication") == null
-                ) Thread.sleep(10)
+                ) {
+                }
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
                     application = this
                     if (ModuleInfo.isDebug() && Build.VERSION.SDK_INT > Build.VERSION_CODES.O_MR1) {
@@ -198,6 +205,9 @@ object Hookworm {
                         onApplicationInitializedListener?.invoke(this)
                     }
                     registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks())
+                    tempActivityLifecycleCallbacksList.forEach { callback ->
+                        registerActivityLifecycleCallbacks(callback)
+                    }
                     isApplicationInitialized = true
                 }
             } catch (e: Exception) {
@@ -317,7 +327,168 @@ object Hookworm {
         }
     }
 
-    class ActivityLifecycleCallbacks : Application.ActivityLifecycleCallbacks {
+    /**
+     *  监听[Activity.onCreate]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityCreated(
+        className: String, callback: (Activity, Bundle?) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            if (activity::class.java.name == className) {
+                callback(activity, savedInstanceState)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onStart]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityStarted(
+        className: String, callback: (Activity) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityStarted(activity: Activity) {
+            if (activity::class.java.name == className) {
+                callback(activity)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onResume]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityResumed(
+        className: String, callback: (Activity) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityResumed(activity: Activity) {
+            if (activity::class.java.name == className) {
+                callback(activity)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onPause]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityPaused(
+        className: String, callback: (Activity) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityPaused(activity: Activity) {
+            if (activity::class.java.name == className) {
+                callback(activity)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onStop]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityStopped(
+        className: String, callback: (Activity) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityStopped(activity: Activity) {
+            if (activity::class.java.name == className) {
+                callback(activity)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onDestroy]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivityDestroyed(
+        className: String, callback: (Activity) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivityDestroyed(activity: Activity) {
+            if (activity::class.java.name == className) {
+                callback(activity)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    /**
+     *  监听[Activity.onSaveInstanceState]方法回调
+     *  @param className 对应的Activity类名（完整类名）
+     *  @param callback Callback lambda
+     *
+     *  @return [Application.ActivityLifecycleCallbacks]实例，可用来取消注册
+     */
+    fun registerOnActivitySaveInstanceState(
+        className: String, callback: (Activity, Bundle) -> Unit
+    ): Application.ActivityLifecycleCallbacks = object : SimpleActivityLifecycleCallbacks() {
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
+            if (activity::class.java.name == className) {
+                callback(activity, outState)
+            }
+        }
+    }.apply {
+        if (::application.isInitialized) {
+            application.registerActivityLifecycleCallbacks(this)
+        } else {
+            tempActivityLifecycleCallbacksList += this
+        }
+    }
+
+    private class ActivityLifecycleCallbacks : Application.ActivityLifecycleCallbacks {
 
         override fun onActivityCreated(
             activity: Activity, savedInstanceState: Bundle?
