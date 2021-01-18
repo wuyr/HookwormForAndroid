@@ -109,7 +109,7 @@
 |Name|Description|
 |------|-----------|
 |Hookworm.setTransferClassLoader(true)|转接插件Dex的ClassLoader<br/>如果引用到了目标应用的一些自定义类或接口（或第三方库），则需要开启转接，否则会报ClassNotFoundException|
-|Hookworm.setHookGlobalLayoutInflater(true)|劫持全局的LayoutInflater<br/>如果需要监听Fragment的布局加载则需要开启|
+|Hookworm.setHookGlobalLayoutInflater(true)|劫持全局的LayoutInflater|
 |Hookworm.setOnApplicationInitializedListener|监听Application初始化|
 |Hookworm.registerActivityLifecycleCallbacks|监听Activity的生命周期|
 |Hookworm.registerPostInflateListener|拦截LayoutInflater布局加载|

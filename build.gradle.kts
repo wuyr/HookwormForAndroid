@@ -170,7 +170,7 @@ fun File.buildModule() {
             generateSHA256Sum()
         }
         buildDir.resolve("outputs/module").also { it.mkdirs() }.run {
-            val moduleFile = File(this, "${moduleId}.zip")
+            val moduleFile = File(this, "${moduleId}_$moduleVersionName.zip")
             zipTo(moduleFile, zipPath)
             if (automaticInstallation) {
                 if (isDeviceConnected(this@buildModule)) {

@@ -43,7 +43,6 @@ object Hookworm {
 
     /**
      * 是否劫持全局的LayoutInflater
-     * 如果需要监听Fragment的布局加载则需要开启
      */
     @JvmStatic
     var hookGlobalLayoutInflater = false
@@ -106,25 +105,7 @@ object Hookworm {
         if (className.isEmpty() && hookGlobalLayoutInflater) {
             globalLayoutInflater?.postInflateListener = postInflateListener
         } else {
-            activities[className]?.also { activity ->
-                val oldInflater = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-                if (oldInflater is PhoneLayoutInflater) {
-                    if (oldInflater.postInflateListener != postInflateListener) {
-                        oldInflater.postInflateListener = postInflateListener
-                    }
-                } else {
-                    val inflater = PhoneLayoutInflater(
-                        activity
-                    ).apply {
-                        this.postInflateListener = postInflateListener
-                    }
-                    try {
-                        ContextThemeWrapper::class.set(activity, "mInflater", inflater)
-                    } catch (e: Exception) {
-                        Log.e(Main.TAG, "registerPostInflateListener", e)
-                    }
-                }
-            }
+            activities[className]?.hookLayoutInflater(postInflateListener)
         }
     }
 
@@ -236,24 +217,43 @@ object Hookworm {
     private fun hookLayoutInflater(className: String, activity: Activity) {
         if (postInflateListenerList.isNotEmpty()) {
             (postInflateListenerList[className]
-                ?: if (hookGlobalLayoutInflater) null else postInflateListenerList[""]).let { postInflateListener ->
-                if (postInflateListener != null) {
-                    val oldInflater =
-                        activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE)
-                    if (oldInflater is PhoneLayoutInflater) {
-                        oldInflater.postInflateListener = postInflateListener
-                    } else {
-                        val inflater = PhoneLayoutInflater(activity)
-                        inflater.postInflateListener = postInflateListener
-                        try {
-                            ContextThemeWrapper::class.set(
-                                activity, "mInflater", inflater
-                            )
-                        } catch (e: Exception) {
-                            Log.e(Main.TAG, "hookLayoutInflater", e)
-                        }
+                ?: if (hookGlobalLayoutInflater) null else postInflateListenerList[""])
+                ?.also { activity.hookLayoutInflater(it) }
+        }
+    }
+
+    @SuppressLint("PrivateApi")
+    private fun Activity.hookLayoutInflater(
+        postInflateListener: (resourceId: Int, resourceName: String, rootView: View?) -> View?
+    ) {
+        val oldInflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE)
+        if (oldInflater is PhoneLayoutInflater) {
+            oldInflater.postInflateListener = postInflateListener
+        } else {
+            val inflater = PhoneLayoutInflater(this).also {
+                it.postInflateListener = postInflateListener
+            }
+            try {
+                ContextThemeWrapper::class.set(this, "mInflater", inflater)
+            } catch (e: Exception) {
+                Log.e(Main.TAG, "hookLayoutInflater", e)
+            }
+        }
+        val oldWindowInflater = window.layoutInflater
+        if (oldWindowInflater is PhoneLayoutInflater) {
+            oldWindowInflater.postInflateListener = postInflateListener
+        } else {
+            try {
+                val phoneWindowClass =
+                    Class.forName("com.android.internal.policy.PhoneWindow")
+                if (phoneWindowClass.isInstance(window)) {
+                    val inflater = PhoneLayoutInflater(this).also {
+                        it.postInflateListener = postInflateListener
                     }
+                    phoneWindowClass.set(window, "mLayoutInflater", inflater)
                 }
+            } catch (e: Exception) {
+                Log.e(Main.TAG, "hookLayoutInflater", e)
             }
         }
     }
