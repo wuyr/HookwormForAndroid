@@ -2,7 +2,7 @@
 
 >### 此Module仅供大家学习研究，请勿用于商业用途。利用此Module进行非法行为造成的一切后果自负！
 
-### 博客详情： 敬请期待。。。
+### 博客详情： <https://blog.csdn.net/u011387817/article/details/113482330>
 
 ### 背景：
 前段时间在WanAndroid每日一问里有个问题：**"应用进程中那4个Binder线程分别是跟谁通讯？"** 
@@ -124,7 +124,7 @@
 
 <br/>
 
-### 功能示例Demo： 敬请期待。。。
+### 功能示例Demo： <https://github.com/wuyr/HookwormForWanAndroidTest>
 
 <br/>
 

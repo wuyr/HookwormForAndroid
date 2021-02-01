@@ -24,6 +24,7 @@ import kotlin.concurrent.thread
  * @github https://github.com/wuyr/HookwormForAndroid
  * @since 2020-09-20 下午3:07
  */
+@Suppress("unused")
 object Hookworm {
 
     /**
@@ -161,6 +162,7 @@ object Hookworm {
 
     private var initialized = false
 
+    @SuppressLint("PrivateApi", "DiscouragedPrivateApi")
     @Suppress("ControlFlowWithEmptyBody")
     @JvmStatic
     fun init() {
@@ -171,8 +173,9 @@ object Hookworm {
             try {
                 while (Looper.getMainLooper() == null) {
                 }
-                while ("android.app.ActivityThread".invoke<Any>(null, "currentApplication") == null
-                ) {
+                val currentApplicationMethod = Class.forName("android.app.ActivityThread")
+                    .getDeclaredMethod("currentApplication").also { it.isAccessible = true }
+                while (currentApplicationMethod.invoke(null) == null) {
                 }
                 "android.app.ActivityThread".invoke<Application>(null, "currentApplication")!!.run {
                     application = this
